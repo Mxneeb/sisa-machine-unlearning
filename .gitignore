@@ -1,0 +1,23 @@
+.claude/
+.cursor/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.DS_Store
+Thumbs.db
+
+# Large datasets and model checkpoints
+data/
+checkpoints/
+*.pt
+*.pth
+*.tar.gz
+
+# Generated outputs
+*.png
+*.jpg
+*.jpeg
+*.pdf
+Final_Report.html
+Proposal.html

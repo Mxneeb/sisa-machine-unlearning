@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SISA Unlearning Studio</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+<style>
+  :root {
+    --brand: #1a56a0;
+    --brand-light: #e8f0fe;
+    --success: #2d6a4f;
+    --danger: #c0392b;
+  }
+  body { background: #f0f2f5; font-family: 'Segoe UI', sans-serif; }
+  .navbar { background: var(--brand) !important; }
+  .navbar-brand { font-weight: 700; letter-spacing: 0.5px; color: #fff !important; }
+  .card { border: none; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,.08); }
+  .card-header {
+    background: var(--brand);
+    color: #fff;
+    border-radius: 12px 12px 0 0 !important;
+    font-weight: 600;
+    font-size: 0.95rem;
+    padding: 12px 18px;
+  }
+  .badge-domain {
+    background: var(--brand-light);
+    color: var(--brand);
+    border: 1px solid var(--brand);
+    border-radius: 20px;
+    padding: 3px 12px;
+    font-size: 0.8rem;
+    font-weight: 600;
+  }
+  .metric-card {
+    background: #fff;
+    border-radius: 10px;
+    padding: 16px;
+    text-align: center;
+    box-shadow: 0 1px 8px rgba(0,0,0,.07);
+  }
+  .metric-card .value {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--brand);
+  }
+  .metric-card .label { font-size: 0.8rem; color: #666; margin-top: 2px; }
+  #log-box {
+    background: #0d1117;
+    color: #58d68d;
+    font-family: monospace;
+    font-size: 0.82rem;
+    border-radius: 8px;
+    padding: 12px;
+    height: 200px;
+    overflow-y: auto;
+  }
+  #forget-log-table th { background: var(--brand); color: #fff; }
+  .step-badge {
+    display: inline-block;
+    background: var(--brand);
+    color: #fff;
+    border-radius: 50%;
+    width: 26px; height: 26px;
+    line-height: 26px;
+    text-align: center;
+    font-weight: 700;
+    font-size: 0.85rem;
+    margin-right: 8px;
+  }
+  .status-pill {
+    border-radius: 20px;
+    padding: 3px 14px;
+    font-size: 0.8rem;
+    font-weight: 600;
+  }
+  .status-idle    { background: #e2e3e5; color: #495057; }
+  .status-training { background: #fff3cd; color: #856404; }
+  .status-trained  { background: #d1f5df; color: #155724; }
+  .status-unlearning { background: #fce4ec; color: #880e4f; }
+</style>
+</head>
+<body>
+
+<nav class="navbar navbar-dark mb-4">
+  <div class="container-fluid">
+    <span class="navbar-brand"><i class="bi bi-cpu me-2"></i>SISA Unlearning Studio</span>
+    <span class="badge-domain">Machine Unlearning &nbsp;|&nbsp; IEEE S&amp;P 2021</span>
+    <span id="status-pill" class="status-pill status-idle ms-3">● Idle</span>
+  </div>
+</nav>
+
+<div class="container-fluid px-4">
+
+  <!-- Info Banner -->
+  <div class="alert alert-info d-flex align-items-start mb-4 rounded-3" role="alert">
+    <i class="bi bi-info-circle-fill me-3 mt-1 fs-5"></i>
+    <div>
+      <strong>Base Paper:</strong> Bourtoule et al., <em>"Machine Unlearning"</em>, IEEE S&amp;P 2021 &nbsp;|&nbsp;
+      <strong>Dataset:</strong> MNIST (demo) &nbsp;|&nbsp;
+      <strong>Concept:</strong> SISA = <u>S</u>harded, <u>I</u>solated, <u>S</u>liced &amp; <u>A</u>ggregated training
+      enables fast data removal without full model retraining.
+    </div>
+  </div>
+
+  <div class="row g-4">
+
+    <!-- LEFT COLUMN: Train + Forget Controls -->
+    <div class="col-lg-4">
+
+      <!-- Step 1: Train -->
+      <div class="card mb-4">
+        <div class="card-header"><span class="step-badge">1</span>Train with SISA</div>
+        <div class="card-body">
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Number of Shards (S)</label>
+            <input type="number" id="num_shards" class="form-control" value="3" min="1" max="10">
+            <small class="text-muted">Dataset split into S independent models</small>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Number of Slices (Q)</label>
+            <input type="number" id="num_slices" class="form-control" value="3" min="1" max="10">
+            <small class="text-muted">Checkpoints per shard for fast replay</small>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Epochs per Slice</label>
+            <input type="number" id="epochs" class="form-control" value="1" min="1" max="10">
+          </div>
+          <button id="btn-train" class="btn w-100" style="background:var(--brand);color:#fff">
+            <i class="bi bi-play-fill me-1"></i>Start SISA Training
+          </button>
+        </div>
+      </div>
+
+      <!-- Step 2: Forget Request -->
+      <div class="card">
+        <div class="card-header"><span class="step-badge">2</span>Submit Forget Request</div>
+        <div class="card-body">
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Data Point Index</label>
+            <input type="number" id="forget_index" class="form-control" placeholder="e.g. 42" min="0">
+            <small class="text-muted">Index of the training sample to remove</small>
+          </div>
+          <button id="btn-forget" class="btn btn-danger w-100">
+            <i class="bi bi-trash-fill me-1"></i>Request Data Deletion
+          </button>
+          <div id="forget-result" class="mt-3"></div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- MIDDLE COLUMN: Metrics -->
+    <div class="col-lg-4">
+      <div class="card h-100">
+        <div class="card-header"><span class="step-badge">3</span>Live Metrics</div>
+        <div class="card-body">
+          <div class="row g-3 mb-3">
+            <div class="col-6">
+              <div class="metric-card">
+                <div class="value" id="m-shards">—</div>
+                <div class="label">Shards</div>
+              </div>
+            </div>
+            <div class="col-6">
+              <div class="metric-card">
+                <div class="value" id="m-slices">—</div>
+                <div class="label">Slices / Shard</div>
+              </div>
+            </div>
+            <div class="col-6">
+              <div class="metric-card">
+                <div class="value" id="m-train-time">—</div>
+                <div class="label">Train Time (s)</div>
+              </div>
+            </div>
+            <div class="col-6">
+              <div class="metric-card">
+                <div class="value" id="m-samples">—</div>
+                <div class="label">Training Samples</div>
+              </div>
+            </div>
+          </div>
+
+          <h6 class="fw-bold mb-2">Forget Requests: <span id="m-forget-count" class="text-danger">0</span></h6>
+          <div id="log-box"><span class="text-secondary">Waiting for training to start...</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT COLUMN: Audit Log -->
+    <div class="col-lg-4">
+      <div class="card h-100">
+        <div class="card-header"><span class="step-badge">4</span>GDPR Audit Log</div>
+        <div class="card-body p-0">
+          <table class="table table-sm table-hover mb-0" id="forget-log-table">
+            <thead>
+              <tr>
+                <th>Timestamp</th>
+                <th>Index</th>
+                <th>Shard</th>
+                <th>Time (s)</th>
+              </tr>
+            </thead>
+            <tbody id="forget-log-body">
+              <tr><td colspan="4" class="text-center text-muted py-4">No forget requests yet.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- How SISA Works -->
+  <div class="card mt-4 mb-5">
+    <div class="card-header">How SISA Works</div>
+    <div class="card-body">
+      <div class="row g-3 text-center">
+        <div class="col-md-3">
+          <div class="p-3" style="background:var(--brand-light);border-radius:10px">
+            <i class="bi bi-grid-3x3 fs-2 text-primary"></i>
+            <h6 class="fw-bold mt-2">1. Sharding</h6>
+            <small>Training data is split into S disjoint shards. A separate model is trained per shard.</small>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="p-3" style="background:#e8f5e9;border-radius:10px">
+            <i class="bi bi-shield-check fs-2" style="color:var(--success)"></i>
+            <h6 class="fw-bold mt-2">2. Isolation</h6>
+            <small>Shard models are trained independently — gradients never mix across shards.</small>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="p-3" style="background:#fff8e1;border-radius:10px">
+            <i class="bi bi-scissors fs-2 text-warning"></i>
+            <h6 class="fw-bold mt-2">3. Slicing</h6>
+            <small>Each shard is further divided into slices with checkpoints after each one.</small>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="p-3" style="background:#fce4ec;border-radius:10px">
+            <i class="bi bi-bar-chart-line fs-2 text-danger"></i>
+            <h6 class="fw-bold mt-2">4. Aggregation</h6>
+            <small>At inference, softmax outputs of all shard models are averaged for the final prediction.</small>
+          </div>
+        </div>
+      </div>
+      <p class="text-center text-muted mt-3 mb-0" style="font-size:0.85rem">
+        On a forget request, only the affected shard is partially retrained from the last clean checkpoint —
+        achieving up to <strong>4.63× speedup</strong> over full retraining (Purchase-100 dataset, Bourtoule et al. 2021).
+      </p>
+    </div>
+  </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+  const statusPill = document.getElementById('status-pill');
+  const logBox = document.getElementById('log-box');
+  let pollInterval = null;
+
+  function setStatusPill(status) {
+    const labels = { idle: '● Idle', training: '⟳ Training…', trained: '✓ Trained', unlearning: '⟳ Unlearning…' };
+    const classes = { idle: 'status-idle', training: 'status-training', trained: 'status-trained', unlearning: 'status-unlearning' };
+    statusPill.textContent = labels[status] || status;
+    statusPill.className = 'status-pill ms-3 ' + (classes[status] || 'status-idle');
+  }
+
+  function appendLog(lines) {
+    logBox.innerHTML = '';
+    (lines || []).forEach(line => {
+      const d = document.createElement('div');
+      d.textContent = line;
+      logBox.appendChild(d);
+    });
+    logBox.scrollTop = logBox.scrollHeight;
+  }
+
+  function updateMetrics(metrics) {
+    if (!metrics || Object.keys(metrics).length === 0) return;
+    document.getElementById('m-shards').textContent = metrics.num_shards ?? '—';
+    document.getElementById('m-slices').textContent = metrics.num_slices ?? '—';
+    document.getElementById('m-train-time').textContent = metrics.total_training_time_seconds ?? '—';
+    document.getElementById('m-samples').textContent = metrics.training_samples ?? '—';
+  }
+
+  function updateForgetLog(entries) {
+    document.getElementById('m-forget-count').textContent = entries.length;
+    const tbody = document.getElementById('forget-log-body');
+    if (entries.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-4">No forget requests yet.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = entries.map(e => `
+      <tr>
+        <td><small>${e.timestamp}</small></td>
+        <td><code>${e.index}</code></td>
+        <td>Shard ${e.affected_shard}</td>
+        <td>${e.unlearn_time_seconds}s</td>
+      </tr>`).join('');
+  }
+
+  async function poll() {
+    try {
+      const r = await fetch('/api/status');
+      const data = await r.json();
+      setStatusPill(data.status);
+      appendLog(data.training_log);
+      updateMetrics(data.metrics);
+      updateForgetLog(data.forget_log);
+      if (data.status === 'trained' || data.status === 'idle') {
+        if (data.status === 'trained') stopPolling();
+      }
+    } catch(e) { /* network error, keep polling */ }
+  }
+
+  function startPolling() {
+    if (pollInterval) return;
+    pollInterval = setInterval(poll, 2000);
+    poll();
+  }
+
+  function stopPolling() {
+    if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
+  }
+
+  document.getElementById('btn-train').addEventListener('click', async () => {
+    const body = {
+      num_shards: +document.getElementById('num_shards').value,
+      num_slices: +document.getElementById('num_slices').value,
+      epochs_per_slice: +document.getElementById('epochs').value,
+    };
+    const r = await fetch('/api/train', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(body),
+    });
+    const data = await r.json();
+    if (r.ok) {
+      logBox.innerHTML = '<div>Training started…</div>';
+      startPolling();
+    } else {
+      alert(data.error || 'Error starting training');
+    }
+  });
+
+  document.getElementById('btn-forget').addEventListener('click', async () => {
+    const idx = document.getElementById('forget_index').value;
+    if (idx === '') { alert('Please enter a data point index.'); return; }
+    const r = await fetch('/api/forget', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ index: +idx }),
+    });
+    const data = await r.json();
+    const resultDiv = document.getElementById('forget-result');
+    if (r.ok) {
+      resultDiv.innerHTML = `<div class="alert alert-success p-2">
+        <i class="bi bi-check-circle-fill me-1"></i>
+        Forgotten! Shard ${data.affected_shard} retrained from slice ${data.replay_from_slice}
+        in <strong>${data.unlearn_time_seconds}s</strong>.
+      </div>`;
+      poll();
+    } else {
+      resultDiv.innerHTML = `<div class="alert alert-danger p-2">${data.error}</div>`;
+    }
+  });
+
+  // Initial status poll
+  poll();
+</script>
+</body>
+</html>
